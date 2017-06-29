@@ -1,0 +1,21 @@
+.vscode
+
+bin
+build
+dist
+doc
+src
+
+.gitignore
+.npmignore
+gulpfile.js
+
+# Travis
+travis.yml
+
+# Batch
+*.cmd
+
+# TypeScript
+tsconfig.json
+*.ts
