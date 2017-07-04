@@ -1,5 +1,5 @@
 # gulp-cw-vue-app-pack
-Vue组件打包工具。将单个`.Vue`的组件转成`.js`
+Vue 组件打包工具。将单个`.Vue`的组件转成`.js` 和 `.html` 
 
 ##使用方式
 ###安装

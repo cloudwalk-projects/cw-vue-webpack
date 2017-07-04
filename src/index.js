@@ -25,99 +25,177 @@ const SCRIPT_REPLACER_REG = /^\s*export\s+default\s*/im;
 const VUE_COMPONENT_IMPORT_REG = /^\s*import\s+([^\s]+)\s+from\s+([^;\n]+)[\s;]+?$/mg;
 
 module.exports = function (options) {
-    return through2.obj(vuePack);
-};
+  options = options || {
+    presets: ['es2015'],
+    plugins: ['transform-runtime', 'transform-es2015-modules-amd'],
+    comments: false,
+  };
 
-/**
- * 打包组件成js和css文件
- * @param file
- * @param encoding
- * @param callback
- */
-function vuePack(file, encoding, callback) {
-    console.log(file);
+  /**
+   * 打包组件成js和css文件
+   * @param file
+   * @param encoding
+   * @param callback
+   */
+  return through2.obj(function (file, encoding, callback) {
     if (!file) {
-        throw new PluginError('gulp-vue-pack', 'file不存在');
+      throw new PluginError('gulp-cw-vue-app-pack', 'file不存在');
     }
 
     if (file.isStream()) {
-        throw new PluginError('gulp-vue-pack', '只支持.vue文件');
+      throw new PluginError('gulp-cw-vue-app-pack', '只支持.vue文件');
     }
 
     if (!file.contents) {
-        // 非文件,是目录
-        callback();
-        return;
+      // 非文件,是目录
+      callback();
+      return;
     }
 
     // 设置文件名称
     let fileName = path.basename(file.path, ".vue");
     // 设置文件内容
     let fileContent = file.contents.toString(encoding);
+    // 设置文件路径
+    let filePath = path.dirname(file.path);
 
-    let data = parseVueFile(fileContent, fileName, path.dirname(file.path));
-    
-    let fpath = path.dirname(file.path);
+    let data = parseVueFile(fileContent, fileName, filePath);
+    // 目标目录
+    let destPath = filePath + '\\' + fileName;
 
-    // console.log('path:' + fpath);
+    let hasTemplate = false;
 
-    var result = babel.transform(contents.script, {
-        presets: ['es2015'],
-        plugins: ['transform-runtime', 'transform-es2015-modules-amd'],
-        comments: false,
-    });
-
-    this.push(createFile(file.base, file.cwd, fpath + '/' + fileName, "index.html", contents.template));
-
-    this.push(createFile(file.base, file.cwd, fpath + '/' + fileName, "index.js", result.code));
+    if (data.template.length > 0) {
+      this.push(createFile(file.base, file.cwd, destPath, "index.html", fixParentPath(data.template)));
+      data.script = 'import template from "text!./index.html";\n' + data.script;
+      hasTemplate = true;
+      // gutil.log(destPath + '\\index.html created.');
+    }
 
     // 如果css文件无内容，则不生成css文件
-    if (contents.style.length > 0) {
-        this.push(createFile(file.base, file.cwd, fpath + '/' + fileName, "index.css", contents.style));
+    if (data.style.length > 0) {
+      this.push(createFile(file.base, file.cwd, destPath, "index.css", fixParentPath(data.style)));
+      data.script = 'import style from "css!./index.css";\n' + data.script;
+      // gutil.log(destPath + '\\index.css created.');
     }
 
-    callback();
+    let lines = fixParentPath(data.script).split('\n');
 
-}
+    // 是否定义了模板变量
+    let definedTemplate = false;
 
-function createFile(base, cwd, fpath, fileName, content) {
-    return new File({
-        base: base,
-        cwd: cwd,
-        path: path.join(fpath, fileName),
-        contents: new Buffer(content)
-    });
-}
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      // 处理引用文件
+      if (line.indexOf('import') == 0) {
+        // 处理 vue 文件引用
+        line = line.replace('.vue";', '/index.js";').replace('.vue\';', '/index.js\';');
+        lines[i] = line;
+      }
+      // 处理模板文件
+      else if (line.indexOf('"{template-content}"') > -1 || line.indexOf('\'{template-content}\'') > -1) {
+        lines[i] = lines[i].replace('"{template-content}"', 'template').replace('\'{template-content}\'', 'template');
+        definedTemplate = true;
+      }
 
-function parseVueFile(vueContent, fileName, filePath) {
-    console.log('vueContent:' + vueContent);
-    console.log('fileName:' + fileName);
-    console.log('filePath:' + filePath);
+      // console.log(lines[i]);
+    }
 
-    let scriptContents = "";
-    let styleContents = "";
-    let templateContents = "";
-
-    let DomUtils = HTMLParser.DomUtils;
-    let domEls = HTMLParser.parseDOM(vueContent, { lowerCaseTags: true });
-
-    for (let i = 0, len = domEls.length; i < len; i++) {
-        switch (domEls[i].name) {
-            case SCRIPT:
-                scriptContents = DomUtils.getText(domEls[i]);
-                break;
-            case TEMPLATE:
-                templateContents = DomUtils.getInnerHTML(domEls[i]);
-                break;
-            case STYLE:
-                styleContents = DomUtils.getText(domEls[i]).trim();
-                break;
+    if (hasTemplate && !definedTemplate) {
+      // 最后一个大括号出现的位置
+      let lastLineIndex = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf('template:') > -1) {
+          definedTemplate = true;
+          break;
         }
+        if (lines[i].lastIndexOf('}') > -1) {
+          lastLineIndex = i;
+        }
+      }
+
+      if (!definedTemplate && lastLineIndex > 0) {
+        let text = lines[lastLineIndex];
+        let index = text.lastIndexOf('}');
+        lines[lastLineIndex] = text.substr(0, index) + ',\ntemplate:template' + text.substr(index, text.length - index);
+      }
     }
 
-    return {
-        script: scriptContents,
-        template: templateContents,
-        style: styleContents
+    data.script = lines.join('\n');
+
+    let result = babel.transform(data.script, options);
+
+    this.push(createFile(file.base, file.cwd, destPath, "index.js", result.code));
+    // gutil.log(destPath + '\\index.js created.');
+    callback();
+  });
+};
+
+/**
+ * 创建 Gulp File Stream
+ */
+const createFile = (base, cwd, fpath, fileName, content) => {
+  return new File({
+    base: base,
+    cwd: cwd,
+    path: path.join(fpath, fileName),
+    contents: new Buffer(content)
+  });
+}
+
+/**
+ * 解析 vue 文件内容
+ */
+const parseVueFile = (vueContent, fileName, filePath) => {
+  let scriptContents = "";
+  let styleContents = "";
+  let templateContents = "";
+
+  let DomUtils = HTMLParser.DomUtils;
+  let domEls = HTMLParser.parseDOM(vueContent, { lowerCaseTags: true });
+
+  for (let i = 0, len = domEls.length; i < len; i++) {
+    switch (domEls[i].name) {
+      case SCRIPT:
+        scriptContents = DomUtils.getText(domEls[i]);
+        break;
+      case TEMPLATE:
+        templateContents = DomUtils.getInnerHTML(domEls[i]);
+        break;
+      case STYLE:
+        styleContents = DomUtils.getText(domEls[i]).trim();
+        break;
     }
+  }
+
+  return {
+    script: scriptContents,
+    template: templateContents,
+    style: styleContents
+  }
+}
+
+/**
+ * 处理父级路径
+ */
+const fixParentPath = (content) => {
+  // gutil.log(content);
+  let lines = content.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // 处理引用文件
+    // (*) 这里可能用正则表达式性能更佳
+    if (line.indexOf('"./') > -1 || line.indexOf('\'./') > -1 || line.indexOf('"../') > -1 || line.indexOf('\'../') > -1) {
+      // 处理相对路径
+      line = line.replace('"./', '"../')
+        .replace('\'./', '\'../')
+        .replace('"../', '"../../')
+        .replace('\'../', '\'../../');
+      lines[i] = line;
+    }
+  }
+
+  return lines.join('\n');
 }

@@ -10,15 +10,14 @@
 }
 </style>
 <script>
+import header from './includes/header.vue';
+
 export default {
-  // 定义模板变量
-  // template,
   data() {
     return {
       msg: 'hello vue'
     }
   },
-  components: {}
-}
+  components: {}}
 </script>
 
