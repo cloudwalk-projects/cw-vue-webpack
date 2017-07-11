@@ -1,7 +1,7 @@
 {
   "name": "gulp-cw-vue-app-pack",
-  "version": "0.0.7",
-  "description": "Vue 组件打包工具。将单个`.Vue`的组件转成`.js` 和 `.html` ",
+  "version": "0.0.8",
+  "description": "Vue 组件打包工具。将单个`.Vue`的组件转成支持 AMD 方式加载的 `.js` 和 `.html` 文件",
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -31,7 +31,11 @@
     "vinyl": "^2.0.0"
   },
   "devDependencies": {
+    "autoprefixer": "^7.1.1",
+    "cssnext": "^1.8.4",
     "gulp": "^3.9.1",
-    "gulp-babel": "^6.1.2"
+    "gulp-babel": "^6.1.2",
+    "postcss": "^6.0.5",
+    "precss": "^2.0.0"
   }
 }

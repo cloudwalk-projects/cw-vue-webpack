@@ -4,11 +4,6 @@
     <div v-bind="model1">{{text}}</div>
   </div>
 </template>
-<style>
-#header {
-  width: 100px;
-}
-</style>
 <script>
 import header from './includes/header.vue';
 
@@ -18,6 +13,15 @@ export default {
       msg: 'hello vue'
     }
   },
-  components: {}}
+  components: {}
+}
 </script>
 
+<style scoped>
+.table-header {
+  color:#ffffff;
+}
+#header {
+  width: 100px;
+}
+</style>

@@ -13,6 +13,14 @@ const HTMLParser = require("htmlparser2");
 
 const babel = require("babel-core");
 
+/**
+ * postcss
+ */
+const postcss = require('postcss'),
+  autoprefixer = require('autoprefixer'),
+  cssnext = require('cssnext'),
+  precss = require('precss');
+
 const PluginError = gutil.PluginError;
 
 const SCRIPT = "script";
@@ -52,6 +60,8 @@ module.exports = function (options) {
       return;
     }
 
+    let fileId = 'cw-file-' + createFileId();
+
     // 设置文件名称
     let fileName = path.basename(file.path, ".vue");
     // 设置文件内容
@@ -65,8 +75,43 @@ module.exports = function (options) {
 
     let hasTemplate = false;
 
+    let _this = this;
+
     if (data.template.length > 0) {
-      this.push(createFile(file.base, file.cwd, destPath, "index.html", fixParentPath(data.template)));
+      let templateContent = fixParentPath(data.template);
+
+      let DomUtils = HTMLParser.DomUtils;
+      let domEls = HTMLParser.parseDOM(templateContent, { lowerCaseTags: true });
+
+      templateContent = '';
+
+      let setFileIdAttr = (elements) => {
+        for (let i = 0, len = elements.length; i < len; i++) {
+          if (elements[i].attribs) {
+            elements[i].attribs[fileId] = '';
+          }
+
+          if (elements[i].children) {
+            setFileIdAttr(elements[i].children);
+          }
+        }
+      };
+
+      for (let i = 0, len = domEls.length; i < len; i++) {
+        if (domEls[i].attribs) {
+          // var attr = DomUtils.createAttribute("good");
+          // document.getElementById("sss").setAttributeNode(d);
+          domEls[i].attribs[fileId] = '';
+          // DomUtils.setAttributeNode(attr);
+        }
+        if (domEls[i].children) {
+          setFileIdAttr(domEls[i].children);
+        }
+
+        templateContent += DomUtils.getOuterHTML(domEls[i], { xmlMode: false });
+      }
+
+      this.push(createFile(file.base, file.cwd, destPath, "index.html", templateContent));
       data.script = 'import template from "text!./index.html";\n' + data.script;
       hasTemplate = true;
       // gutil.log(destPath + '\\index.html created.');
@@ -74,7 +119,45 @@ module.exports = function (options) {
 
     // 如果css文件无内容，则不生成css文件
     if (data.style.length > 0) {
-      this.push(createFile(file.base, file.cwd, destPath, "index.css", fixParentPath(data.style)));
+      let styleContent = fixParentPath(data.style);
+
+      let result = postcss([cssnext])
+        .process(styleContent, { parser: postcss.parser });
+      /*
+      .then(result => {
+        result.root.walkRules(rule => {
+          result.warn(rule.selector);
+          rule.selector = rule.selector + '[cw-page-1]';
+          // selectors.push(rule.selector);
+        });
+
+        styleContent = result.root.toString();
+        gutil.log(styleContent);
+
+        _this.push(createFile(file.base, file.cwd, destPath, "index.css", styleContent));
+      });*/
+      result.root.walkRules(rule => {
+        // 处理 css 名称后缀
+        let selectors = rule.selector.split(',');
+
+        for (let i = 0; i < selectors.length; i++) {
+          let index = selectors[i].lastIndexOf(':');
+
+          if (index > 0) {
+            selectors[i] = selectors[i].substr(0, index) + '[' + fileId + ']' + selectors[i].substr(index, selectors[i].length - index);
+          }
+          else {
+            selectors[i] = selectors[i] + '[' + fileId + ']';
+          }
+        }
+        rule.selector = selectors.join(',');
+      });
+
+      styleContent = result.root.toString();
+      // gutil.log(styleContent);
+
+      _this.push(createFile(file.base, file.cwd, destPath, "index.css", styleContent));
+
       data.script = 'import style from "css!./index.css";\n' + data.script;
       // gutil.log(destPath + '\\index.css created.');
     }
@@ -198,4 +281,14 @@ const fixParentPath = (content) => {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * 生成八位随机数
+ */
+const createFileId = () => {
+  var S4 = function () {
+    return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+  };
+  return (S4() + S4());
 }

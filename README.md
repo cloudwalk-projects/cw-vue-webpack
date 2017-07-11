@@ -1,5 +1,5 @@
 # gulp-cw-vue-app-pack
-Vue 组件打包工具。将单个`.Vue`的组件转成`.js` 和 `.html` 
+Vue 组件打包工具。将单个`.Vue`的组件转成支持 AMD 方式加载的 `.js` 和 `.html` 文件
 
 ##使用方式
 ###安装
